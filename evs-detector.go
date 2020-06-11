@@ -198,12 +198,19 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 	for _, v := range *tokens {
 		d.fsmc.Update(v)
 	}
-	d.fsmc.Dump()
-
+	d.fsmc.Update(ind.Token{"end", ""})
 	hits := d.fsmc.GetHits()
 
 	for _, v := range hits {
-		v.Dump()
+		i := &evs.Indicator{}
+		i.Id = v.Id
+		i.Type = v.Descriptor.Type
+		i.Value = v.Descriptor.Value
+		i.Category = v.Descriptor.Category
+		i.Source = v.Descriptor.Source
+		i.Author = v.Descriptor.Author
+		i.Description = v.Descriptor.Description
+		ev.Indicators = append(ev.Indicators, i)
 	}
 	
 	d.OutputEvent(ev, properties)
@@ -241,9 +248,9 @@ func main() {
 		binding = "cyberprobe"
 	}
 
-	out, ok := os.LookupEnv("ioc")
+	out, ok := os.LookupEnv("OUTPUT")
 	if !ok {
-		d.Init(binding, []string{}, d)
+		d.Init(binding, []string{"ioc"}, d)
 	} else {
 		outarray := strings.Split(out, ",")
 		d.Init(binding, outarray, d)
