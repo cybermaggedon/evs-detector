@@ -10,23 +10,41 @@ import (
 	"log"
 	"strings"
 	"encoding/binary"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Detector analytic
 type Detector struct {
+
+	// Embed EventAnalytic framework
 	evs.EventAnalytic
+
+	// An FSM collection, powers the token scanning
 	fsmc *ind.FsmCollection
+
+	// Indicator filename and last update time
 	indicatorFile string
 	lastIndicatorUpdate time.Time
+
+	// Channel to communicate new FSMs from the Reloader thread to the
+	// main handler
 	ch chan *ind.FsmCollection
+
+	indicator_count prometheus.Gauge
+	hits prometheus.Histogram
+	category_hits *prometheus.CounterVec
+	type_hits *prometheus.CounterVec
+
 }
 
+// Converts a 32-bit int to an IP address
 func int32ToIp(ipLong uint32) net.IP {
 	ipByte := make([]byte, 4)
 	binary.BigEndian.PutUint32(ipByte, ipLong)
 	return net.IP(ipByte)
 }
 
+// Converts a byte array to an IP address. This is for IPv6 addresses.
 func bytesToIp(b []byte) net.IP {
 	return net.IP(b)
 }
@@ -144,6 +162,8 @@ func (d *Detector) LoadIndicators() (*ind.FsmCollection, error) {
 
 	fsmc := ind.CreateFsmCollection(ii)
 
+	d.indicator_count.Set(float64(len(ii.Indicators)))
+
 	log.Printf("%d FSMs created", len(fsmc.Fsms))
 
 	return fsmc, nil
@@ -201,6 +221,8 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 	d.fsmc.Update(ind.Token{"end", ""})
 	hits := d.fsmc.GetHits()
 
+	d.hits.Observe(float64(len(hits)))
+
 	for _, v := range hits {
 		i := &evs.Indicator{}
 		i.Id = v.Id
@@ -211,12 +233,50 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 		i.Author = v.Descriptor.Author
 		i.Description = v.Descriptor.Description
 		ev.Indicators = append(ev.Indicators, i)
+
+		d.category_hits.With(prometheus.Labels{
+			"category": i.Category,
+		}).Inc()
+		d.type_hits.With(prometheus.Labels{
+			"type": i.Type,
+		}).Inc()
+
 	}
 	
 	d.OutputEvent(ev, properties)
 
 	return nil
 
+}
+
+func (d *Detector) Init(binding string, output []string) {
+	d.indicator_count = prometheus.NewGauge(
+		prometheus.GaugeOpts{
+			Name: "indicator_count",
+			Help: "Number of indicators",
+		})
+	d.hits = prometheus.NewHistogram(
+		prometheus.HistogramOpts{
+			Name: "hits",
+			Help: "Number of hits on an event",
+			Buckets: []float64{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+				12, 15, 20, 25, 50},
+		})
+	d.category_hits = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hits_on_category",
+			Help: "Hits by category",
+		}, []string{"category"})
+	d.type_hits = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "hits_on_type",
+			Help: "Hits by type",
+		}, []string{"type"})
+	prometheus.MustRegister(d.indicator_count)
+	prometheus.MustRegister(d.hits)
+	prometheus.MustRegister(d.category_hits)
+	prometheus.MustRegister(d.type_hits)
+	d.EventAnalytic.Init(binding, output, d)
 }
 
 func main() {
@@ -232,6 +292,19 @@ func main() {
 		d.indicatorFile = "indicators.json"
 	}
 
+	binding, ok := os.LookupEnv("INPUT")
+	if !ok {
+		binding = "cyberprobe"
+	}
+
+	out, ok := os.LookupEnv("OUTPUT")
+	if !ok {
+		d.Init(binding, []string{"ioc"})
+	} else {
+		outarray := strings.Split(out, ",")
+		d.Init(binding, outarray)
+	}
+
 	log.Print("Loading indicators...")
 	var err error
 	d.fsmc, err = d.LoadIndicators()
@@ -242,19 +315,6 @@ func main() {
 	log.Print("Indicators loaded.")
 
 	go d.Reloader()
-
-	binding, ok := os.LookupEnv("INPUT")
-	if !ok {
-		binding = "cyberprobe"
-	}
-
-	out, ok := os.LookupEnv("OUTPUT")
-	if !ok {
-		d.Init(binding, []string{"ioc"}, d)
-	} else {
-		outarray := strings.Split(out, ",")
-		d.Init(binding, outarray, d)
-	}
 
 	d.Run()
 
