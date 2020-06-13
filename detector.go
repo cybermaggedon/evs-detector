@@ -1,16 +1,16 @@
 package main
 
 import (
-	"net"
-	"strconv"
-	"time"
+	"encoding/binary"
 	evs "github.com/cybermaggedon/evs-golang-api"
 	ind "github.com/cybermaggedon/indicators"
-	"os"
-	"log"
-	"strings"
-	"encoding/binary"
 	"github.com/prometheus/client_golang/prometheus"
+	"log"
+	"net"
+	"os"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // Detector analytic
@@ -23,7 +23,7 @@ type Detector struct {
 	fsmc *ind.FsmCollection
 
 	// Indicator filename and last update time
-	indicatorFile string
+	indicatorFile       string
 	lastIndicatorUpdate time.Time
 
 	// Channel to communicate new FSMs from the Reloader thread to the
@@ -31,10 +31,9 @@ type Detector struct {
 	ch chan *ind.FsmCollection
 
 	indicator_count prometheus.Gauge
-	hits prometheus.Histogram
-	category_hits *prometheus.CounterVec
-	type_hits *prometheus.CounterVec
-
+	hits            prometheus.Histogram
+	category_hits   *prometheus.CounterVec
+	type_hits       *prometheus.CounterVec
 }
 
 // Converts a 32-bit int to an IP address
@@ -152,7 +151,7 @@ func (d *Detector) LoadIndicators() (*ind.FsmCollection, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	d.lastIndicatorUpdate = stat.ModTime()
 
 	ii, err := ind.LoadIndicatorsFromFile(d.indicatorFile)
@@ -197,20 +196,20 @@ func (d *Detector) Reloader() {
 
 		// Pass indicators to chan
 		d.ch <- fsmc
-		
+
 	}
-	
+
 }
 
 // Event handler
 func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 
 	select {
-        case fsmc := <- d.ch:
+	case fsmc := <-d.ch:
 		d.fsmc = fsmc
 		log.Print("Using new indicators.")
 	default:
-        }
+	}
 
 	tokens := GetTokens(ev)
 
@@ -242,7 +241,7 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 		}).Inc()
 
 	}
-	
+
 	d.OutputEvent(ev, properties)
 
 	return nil
@@ -259,7 +258,7 @@ func (d *Detector) Init(binding string, output []string) {
 		prometheus.HistogramOpts{
 			Name: "hits",
 			Help: "Number of hits on an event",
-			Buckets: []float64{ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+			Buckets: []float64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
 				12, 15, 20, 25, 50},
 		})
 	d.category_hits = prometheus.NewCounterVec(
@@ -319,4 +318,3 @@ func main() {
 	d.Run()
 
 }
-
