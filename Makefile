@@ -12,7 +12,10 @@ evs-detector: detector.go go.mod go.sum
 
 build: evs-detector
 	${DOCKER} build -t ${REPO}:${VERSION} -f Dockerfile .
+	${DOCKER} tag ${REPO}:${VERSION} ${REPO}:latest
 
 push:
 	${DOCKER} push ${REPO}:${VERSION}
+	${DOCKER} push ${REPO}:latest
+
 
