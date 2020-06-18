@@ -3,27 +3,50 @@ package main
 import (
 	"encoding/binary"
 	evs "github.com/cybermaggedon/evs-golang-api"
+	pb "github.com/cybermaggedon/evs-golang-api/protos"
 	ind "github.com/cybermaggedon/indicators"
 	"github.com/prometheus/client_golang/prometheus"
 	"log"
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
+type DetectorConfig struct {
+	*evs.Config
+	IndicatorFile string
+}
+
+func NewDetectorConfig() *DetectorConfig {
+
+	var file string
+	var ok bool
+	file, ok = os.LookupEnv("INDICATORS")
+	if !ok {
+		file = "indicators.json"
+	}
+
+	return &DetectorConfig{
+		Config:        evs.NewConfig("evs-detector", "geo"),
+		IndicatorFile: file,
+	}
+
+}
+
 // Detector analytic
 type Detector struct {
+	*DetectorConfig
 
 	// Embed EventAnalytic framework
-	evs.EventAnalytic
+	*evs.EventSubscriber
+	*evs.EventProducer
+	evs.Interruptible
 
 	// An FSM collection, powers the token scanning
 	fsmc *ind.FsmCollection
 
-	// Indicator filename and last update time
-	indicatorFile       string
+	// Indicator last update time
 	lastIndicatorUpdate time.Time
 
 	// Channel to communicate new FSMs from the Reloader thread to the
@@ -48,7 +71,7 @@ func bytesToIp(b []byte) net.IP {
 	return net.IP(b)
 }
 
-func GetTokens(ev *evs.Event) *[]ind.Token {
+func GetTokens(ev *pb.Event) *[]ind.Token {
 
 	tk := []ind.Token{}
 
@@ -61,7 +84,7 @@ func GetTokens(ev *evs.Event) *[]ind.Token {
 
 }
 
-func GetDns(ev *evs.Event, tk *[]ind.Token) {
+func GetDns(ev *pb.Event, tk *[]ind.Token) {
 	dns := ev.GetDnsMessage()
 	if dns == nil {
 		return
@@ -74,13 +97,13 @@ func GetDns(ev *evs.Event, tk *[]ind.Token) {
 	}
 }
 
-func GetUrl(ev *evs.Event, tk *[]ind.Token) {
+func GetUrl(ev *pb.Event, tk *[]ind.Token) {
 	if ev.Url != "" {
 		*tk = append(*tk, ind.Token{"url", ev.Url})
 	}
 }
 
-func GetEmail(ev *evs.Event, tk *[]ind.Token) {
+func GetEmail(ev *pb.Event, tk *[]ind.Token) {
 	smtp_data := ev.GetSmtpData()
 	if smtp_data == nil {
 		return
@@ -95,25 +118,25 @@ func GetEmail(ev *evs.Event, tk *[]ind.Token) {
 	}
 }
 
-func GetAddresses(ev *evs.Event, tk *[]ind.Token) {
+func GetAddresses(ev *pb.Event, tk *[]ind.Token) {
 
 	for _, addr := range ev.Src {
-		if addr.Protocol == evs.Protocol_ipv4 {
+		if addr.Protocol == pb.Protocol_ipv4 {
 			ip := int32ToIp(addr.Address.GetIpv4()).String()
 			*tk = append(*tk, ind.Token{"ipv4", ip})
 			*tk = append(*tk, ind.Token{"ipv4.src", ip})
 		}
-		if addr.Protocol == evs.Protocol_ipv6 {
+		if addr.Protocol == pb.Protocol_ipv6 {
 			ip := bytesToIp(addr.Address.GetIpv6()).String()
 			*tk = append(*tk, ind.Token{"ipv6", ip})
 			*tk = append(*tk, ind.Token{"ipv6.src", ip})
 		}
-		if addr.Protocol == evs.Protocol_tcp {
+		if addr.Protocol == pb.Protocol_tcp {
 			port := strconv.Itoa(int(addr.Address.GetPort()))
 			*tk = append(*tk, ind.Token{"tcp", port})
 			*tk = append(*tk, ind.Token{"tcp.src", port})
 		}
-		if addr.Protocol == evs.Protocol_udp {
+		if addr.Protocol == pb.Protocol_udp {
 			port := strconv.Itoa(int(addr.Address.GetPort()))
 			*tk = append(*tk, ind.Token{"udp", port})
 			*tk = append(*tk, ind.Token{"udp.src", port})
@@ -121,22 +144,22 @@ func GetAddresses(ev *evs.Event, tk *[]ind.Token) {
 	}
 
 	for _, addr := range ev.Dest {
-		if addr.Protocol == evs.Protocol_ipv4 {
+		if addr.Protocol == pb.Protocol_ipv4 {
 			ip := int32ToIp(addr.Address.GetIpv4()).String()
 			*tk = append(*tk, ind.Token{"ipv4", ip})
 			*tk = append(*tk, ind.Token{"ipv4.dest", ip})
 		}
-		if addr.Protocol == evs.Protocol_ipv6 {
+		if addr.Protocol == pb.Protocol_ipv6 {
 			ip := bytesToIp(addr.Address.GetIpv6()).String()
 			*tk = append(*tk, ind.Token{"ipv6", ip})
 			*tk = append(*tk, ind.Token{"ipv6.dest", ip})
 		}
-		if addr.Protocol == evs.Protocol_tcp {
+		if addr.Protocol == pb.Protocol_tcp {
 			port := strconv.Itoa(int(addr.Address.GetPort()))
 			*tk = append(*tk, ind.Token{"tcp", port})
 			*tk = append(*tk, ind.Token{"tcp.dest", port})
 		}
-		if addr.Protocol == evs.Protocol_udp {
+		if addr.Protocol == pb.Protocol_udp {
 			port := strconv.Itoa(int(addr.Address.GetPort()))
 			*tk = append(*tk, ind.Token{"udp", port})
 			*tk = append(*tk, ind.Token{"udp.dest", port})
@@ -147,14 +170,14 @@ func GetAddresses(ev *evs.Event, tk *[]ind.Token) {
 
 func (d *Detector) LoadIndicators() (*ind.FsmCollection, error) {
 
-	stat, err := os.Stat(d.indicatorFile)
+	stat, err := os.Stat(d.IndicatorFile)
 	if err != nil {
 		return nil, err
 	}
 
 	d.lastIndicatorUpdate = stat.ModTime()
 
-	ii, err := ind.LoadIndicatorsFromFile(d.indicatorFile)
+	ii, err := ind.LoadIndicatorsFromFile(d.IndicatorFile)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +198,7 @@ func (d *Detector) Reloader() {
 
 		time.Sleep(5 * time.Second)
 
-		stat, err := os.Stat(d.indicatorFile)
+		stat, err := os.Stat(d.IndicatorFile)
 		if err != nil {
 			log.Printf("Stat error on indicator file!: %v", err)
 			continue
@@ -202,7 +225,7 @@ func (d *Detector) Reloader() {
 }
 
 // Event handler
-func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
+func (d *Detector) Event(ev *pb.Event, properties map[string]string) error {
 
 	select {
 	case fsmc := <-d.ch:
@@ -223,7 +246,7 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 	d.hits.Observe(float64(len(hits)))
 
 	for _, v := range hits {
-		i := &evs.Indicator{}
+		i := &pb.Indicator{}
 		i.Id = v.Id
 		i.Type = v.Descriptor.Type
 		i.Value = v.Descriptor.Value
@@ -242,13 +265,33 @@ func (d *Detector) Event(ev *evs.Event, properties map[string]string) error {
 
 	}
 
-	d.OutputEvent(ev, properties)
+	d.Output(ev, properties)
 
 	return nil
 
 }
 
-func (d *Detector) Init(binding string, output []string) {
+func NewDetector(dc *DetectorConfig) *Detector {
+
+	d := &Detector{}
+
+	d.DetectorConfig = dc
+
+	var err error
+	d.EventSubscriber, err = evs.NewEventSubscriber(d.Name, d.Input, d)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	d.EventProducer, err = evs.NewEventProducer(d.Name, d.Outputs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	d.RegisterStop(d)
+
+	d.ch = make(chan *ind.FsmCollection)
+
 	d.indicator_count = prometheus.NewGauge(
 		prometheus.GaugeOpts{
 			Name: "indicator_count",
@@ -275,46 +318,26 @@ func (d *Detector) Init(binding string, output []string) {
 	prometheus.MustRegister(d.hits)
 	prometheus.MustRegister(d.category_hits)
 	prometheus.MustRegister(d.type_hits)
-	d.EventAnalytic.Init(binding, output, d)
-}
-
-func main() {
-
-	d := &Detector{}
-	d.ch = make(chan *ind.FsmCollection)
-
-	// Plan is to load indicators (may take some time) before touching
-	// the queue.
-	var ok bool
-	d.indicatorFile, ok = os.LookupEnv("INDICATORS")
-	if !ok {
-		d.indicatorFile = "indicators.json"
-	}
-
-	binding, ok := os.LookupEnv("INPUT")
-	if !ok {
-		binding = "cyberprobe"
-	}
-
-	out, ok := os.LookupEnv("OUTPUT")
-	if !ok {
-		d.Init(binding, []string{"ioc"})
-	} else {
-		outarray := strings.Split(out, ",")
-		d.Init(binding, outarray)
-	}
 
 	log.Print("Loading indicators...")
-	var err error
 	d.fsmc, err = d.LoadIndicators()
 	if err != nil {
-		log.Printf("Error loading indicators: %v", err)
-		return
+		log.Fatal("Error loading indicators: %v", err)
 	}
 	log.Print("Indicators loaded.")
 
 	go d.Reloader()
 
-	d.Run()
+	return d
+
+}
+
+func main() {
+
+	gc := NewDetectorConfig()
+	g := NewDetector(gc)
+	log.Print("Initialisation complete")
+	g.Run()
+	log.Print("Shutdown.")
 
 }

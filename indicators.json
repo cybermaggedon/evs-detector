@@ -19,7 +19,7 @@
             "id": "0acf0328-6276-4726-9686-510633881413",
             "descriptor": {
                 "description": "Malware server IP address",
-                "category": "malware",
+                "category": "tor-exit",
                 "author": "someone@example.com",
                 "source": "id:3245edd9-e0f3-4982-9406-fbf93b874555",
                 "type": "ipv4",
