@@ -254,6 +254,7 @@ func (d *Detector) Event(ev *pb.Event, properties map[string]string) error {
 		i.Source = v.Descriptor.Source
 		i.Author = v.Descriptor.Author
 		i.Description = v.Descriptor.Description
+		i.Probability = v.Descriptor.Probability
 		ev.Indicators = append(ev.Indicators, i)
 
 		d.category_hits.With(prometheus.Labels{
