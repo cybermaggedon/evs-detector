@@ -27,7 +27,7 @@ func NewDetectorConfig() *DetectorConfig {
 		file = "indicators.json"
 	}
 
-	base := evs.NewConfig("evs-detector", "withgeo", []string{"withioc"})
+	base := evs.NewConfig("evs-detector", "withloc", []string{"withioc"})
 
 	return &DetectorConfig{
 		Config:        base,
