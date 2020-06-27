@@ -17,8 +17,8 @@ github.com/cespare/xxhash/v2 v2.1.1 h1:6MnRN8NT7+YBpUIWxHtefFZOKTAPgGjpQSxqLNn0+
 github.com/cespare/xxhash/v2 v2.1.1/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
-github.com/cybermaggedon/evs-golang-api v0.2.1 h1:AKCkeo9gKoJy3Du3B7PAlvz6+LpY0gt2Mr5iKX3gOjo=
-github.com/cybermaggedon/evs-golang-api v0.2.1/go.mod h1:KjMnuSblYcwt3wCTUBc+RTLL2oSl5kOey0q5sCkKjqE=
+github.com/cybermaggedon/evs-golang-api v0.3.0 h1:PwlrQAQdTibGQreROBMGbwFHLILOi9RBAfqIKDnvbpQ=
+github.com/cybermaggedon/evs-golang-api v0.3.0/go.mod h1:KjMnuSblYcwt3wCTUBc+RTLL2oSl5kOey0q5sCkKjqE=
 github.com/cybermaggedon/indicators v0.2.0 h1:NmaUwgzhgS5+DIwexGq0SRLQPBtusmXu7w8fg77Q7lo=
 github.com/cybermaggedon/indicators v0.2.0/go.mod h1:wpBsyrTAteEMhCas/Npol2QCd+QJd/WVwI/Q8z07Urk=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=

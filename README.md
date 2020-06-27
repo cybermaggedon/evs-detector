@@ -14,7 +14,6 @@ a Pulsar service to be running.
       -e PULSAR_BROKER=pulsar://<PULSAR-HOST>:6650 \
       -e INDICATORS=/ind/indicators.json \
       -v ./:/ind \
-      -e OUTPUT=ioc \
       -p 8088:8088 \
       docker.io/cybermaggedon/evs-detector:<VERSION>
 ```
@@ -47,7 +46,7 @@ The following environment variables are used to configure:
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `INPUT` | Specifies the Pulsar topic to subscribe to.  This is just the topic part of the URL e.g. `cyberprobe`. By default the input is `geo` which is the output  of the `evs-geoip` analytic. | `geo` |
-| `OUTPUT` | Specifies a comma-separated list of Pulsar topics to publish annotated events to.  This is just the topic part of the URL e.g. `ioc`. By default, the output is an empty list which  isn't useful (FIXME). | `` |
+| `OUTPUT` | Specifies a comma-separated list of Pulsar topics to publish annotated events to.  This is just the topic part of the URL e.g. `withioc`. By default, the output is `withioc`. | `withioc` |
 | `INDICATORS` | Specifies a filename of indicator which is loaded.  The file is monitored for change, and reloaded automatically. | `indicators.json` |
 | `METRICS_PORT` | Specifies the port number to serve Prometheus metrics on.  If not set, metrics will not be served. The container has a default setting of 8088. | `8088` |
 
