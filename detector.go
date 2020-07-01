@@ -281,12 +281,12 @@ func NewDetector(dc *DetectorConfig) *Detector {
 	d.DetectorConfig = dc
 
 	var err error
-	d.EventSubscriber, err = evs.NewEventSubscriber(d.Name, d.Input, d)
+	d.EventSubscriber, err = evs.NewEventSubscriber(d, d)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	d.EventProducer, err = evs.NewEventProducer(d.Name, d.Outputs)
+	d.EventProducer, err = evs.NewEventProducer(d)
 	if err != nil {
 		log.Fatal(err)
 	}
